@@ -5,3 +5,5 @@ node_modules/
 # research output — large, regenerable, and not source
 research/data/
 research/out/
+research/scratch-*
+research/*.log
