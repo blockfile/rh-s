@@ -1,0 +1,7 @@
+node_modules/
+.env
+*.log
+
+# research output — large, regenerable, and not source
+research/data/
+research/out/
