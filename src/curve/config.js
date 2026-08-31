@@ -33,11 +33,25 @@ module.exports = {
   // 6.4% at 0.5, 2.4% at 1.0.
   buyEth: str(process.env.CURVE_BUY_ETH, '0.08'),
 
-  // Floor on tokens received, in bps off the modelled output. This is the
-  // profitability guard, not slippage tolerance: if someone landed first and
-  // moved the curve, this reverts instead of filling at their price. A revert
-  // costs gas; a bad fill costs the trade.
-  slippageBps: num(process.env.CURVE_SLIPPAGE_BPS, 1200),
+  // Floor on tokens received, in bps off the modelled output.
+  //
+  // 3500 is measured, not guessed. The model prices a FRESH curve, but roughly
+  // half of curves carry the deployer's own buy inside the creation
+  // transaction, so the curve has already moved before the creation event is
+  // even visible. Binary-searching the true output on 7 live curves:
+  //
+  //   dev buy 0        -> 100.0 / 100.4 / 101.1% of the fresh-curve estimate
+  //   dev buy 0.0009   ->  93.9%
+  //   dev buy 0.007    ->  96.2%
+  //   dev buy 0.02     ->  87.0%
+  //   dev buy 0.055    ->  68.8%
+  //
+  // At the old 1200 (88% floor) the last two reverted, which is what the first
+  // live buys did. 3125 covers the worst observed; 3500 leaves margin.
+  //
+  // This is still a real guard: it refuses a curve already run up more than a
+  // third, and being early is separately enforced by maxEntryBlocks.
+  slippageBps: num(process.env.CURVE_SLIPPAGE_BPS, 3500),
 
   // ── timing, which is the whole edge ───────────────────────────────────────
   // Measured ROI by fill latency: <=150ms +94.6%, 150-350ms +52.4%,

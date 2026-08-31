@@ -39,11 +39,15 @@ function stateAfterBuy(amountInWei, tokensOut, { costBps = cfg.assumedCostBps } 
 /**
  * The floor that makes a late fill revert.
  *
- * Priced against a FRESH curve on purpose. If anyone landed ahead of us the
- * curve has already moved, we get fewer tokens than this, and the buy reverts
- * — which is exactly the intent. Measured expectancy past ~6 blocks is
- * negative, so "be early or do not trade" is the correct behaviour, and a
- * revert costs only gas.
+ * Priced against a FRESH curve, which is an APPROXIMATION, not the truth:
+ * roughly half of curves carry the deployer's own buy inside the creation
+ * transaction, so by the time the creation event is visible the curve has
+ * already moved. Measured on live curves, the real output ranges from 68.8%
+ * of this estimate (0.055 ETH dev buy) to 101.1% (no dev buy).
+ *
+ * Reading the dev buy would mean fetching the creation transaction's other
+ * logs, and that round trip costs more than the mispricing does. The floor is
+ * widened to absorb it instead — see slippageBps in config.js.
  */
 function floorTokens(amountInWei) {
   const expected = expectedTokens(amountInWei);
