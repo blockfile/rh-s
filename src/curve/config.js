@@ -34,24 +34,27 @@ module.exports = {
   buyEth: str(process.env.CURVE_BUY_ETH, '0.08'),
 
   // Floor on tokens received, in bps off the modelled output.
+  // 10000 == no floor (minOut = 0).
   //
-  // 3500 is measured, not guessed. The model prices a FRESH curve, but roughly
-  // half of curves carry the deployer's own buy inside the creation
-  // transaction, so the curve has already moved before the creation event is
-  // even visible. Binary-searching the true output on 7 live curves:
+  // THE PRICE MODEL IS NOT TRUSTWORTHY, so a floor derived from it rejects
+  // good trades. Binary-searching the true output of buy(0.02 ETH) on
+  // brand-new curves that all report the SAME config (launchConfigId 0,
+  // graduationThreshold 4.2) returned:
   //
-  //   dev buy 0        -> 100.0 / 100.4 / 101.1% of the fresh-curve estimate
-  //   dev buy 0.0009   ->  93.9%
-  //   dev buy 0.007    ->  96.2%
-  //   dev buy 0.02     ->  87.0%
-  //   dev buy 0.055    ->  68.8%
+  //     6.25M, 11.40M, 17.12M, 50.00M, 50.00M, 50.00M, 75.00M tokens
   //
-  // At the old 1200 (88% floor) the last two reverted, which is what the first
-  // live buys did. 3125 covers the worst observed; 3500 leaves margin.
+  // a 12x spread against a model that always predicts 11.42M. Something
+  // beyond the launch config varies per curve and is not yet identified, so
+  // any floor computed from the model is arbitrary: at 1200bps every live buy
+  // reverted, and at 3500bps they still did.
   //
-  // This is still a real guard: it refuses a curve already run up more than a
-  // third, and being early is separately enforced by maxEntryBlocks.
-  slippageBps: num(process.env.CURVE_SLIPPAGE_BPS, 3500),
+  // Every one of the 22 direct early buyers observed on-chain passes
+  // minOut = 0. Entry protection here comes from maxEntryBlocks -- being
+  // provably early -- not from a price guarantee we cannot compute. Downside
+  // is bounded by the 30s hold and the stop-loss instead.
+  //
+  // Set this back to ~1500 once the model is fixed and can be trusted.
+  slippageBps: num(process.env.CURVE_SLIPPAGE_BPS, 10000),
 
   // ── timing, which is the whole edge ───────────────────────────────────────
   // Measured ROI by fill latency: <=150ms +94.6%, 150-350ms +52.4%,
