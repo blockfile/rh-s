@@ -19,7 +19,8 @@ const TRUE_Q0 = 28.88, TRUE_T0 = 1e9;
 const TOL = 0.001; // 0.1%
 
 const word = (d, i) => Number(BigInt('0x' + d.slice(2).slice(64 * i, 64 * (i + 1))));
-const netQ = (t) => t.q - t.f - t.x;
+const netQ  = (t) => t.q - t.f - t.x;  // buy: what enters the reserve
+const sellQ = (t) => t.q + t.f + t.x;  // sell: what LEAVES it (gross)
 
 async function loadTrades() {
   const out = [];
@@ -63,18 +64,32 @@ function solve(trades) {
       if (tr.t > 0) errs.push(Math.abs(pred - tr.t) / tr.t);
       Q += q; T -= pred;
     } else {
-      const pred = (Q * tr.t) / (T + tr.t);
-      Q -= pred; T += tr.t;
+      Q -= sellQ(tr); T += tr.t;
     }
   }
   errs.sort((a, b) => a - b);
   const median = errs[Math.floor(errs.length / 2)];
+
+  // Replay a SECOND time from the known-true reserves. The fitted version
+  // above cannot catch a sell-side error: solveReserves absorbs it into Q0/T0
+  // and still reports 0.0000%. This is how the gross/net sell bug survived.
+  let Qt = TRUE_Q0 * 1e18, Tt = TRUE_T0 * 1e18; const errsTrue = [];
+  for (const tr of trades) {
+    if (tr.buy) {
+      const q = netQ(tr), pred = (Tt * q) / (Qt + q);
+      if (tr.t > 0) errsTrue.push(Math.abs(pred - tr.t) / tr.t);
+      Qt += q; Tt -= pred;
+    } else { Qt -= sellQ(tr); Tt += tr.t; }
+  }
+  errsTrue.sort((a, b) => a - b);
+  const maxTrue = errsTrue[errsTrue.length - 1];
 
   const checks = [
     ['trades loaded',      trades.length > 300,  `${trades.length}`],
     ['Q0 within 0.1%',     errQ < TOL,           `${(Q0 / 1e18).toFixed(4)} vs ${TRUE_Q0} (${(errQ * 100).toFixed(4)}%)`],
     ['T0 within 0.1%',     errT < TOL,           `${(T0 / 1e18).toExponential(4)} vs 1.0000e+9 (${(errT * 100).toFixed(4)}%)`],
     ['replay median <0.1%', median < TOL,        `${(median * 100).toFixed(4)}% over ${errs.length} buys`],
+    ['TRUE-reserve MAX <0.1%', maxTrue < TOL,    `${(maxTrue * 100).toFixed(4)}% over ${errsTrue.length} buys`],
   ];
   let failed = 0;
   for (const [name, ok, detail] of checks) {

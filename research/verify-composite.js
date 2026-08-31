@@ -10,7 +10,8 @@ const coh = JSON.parse(fs.readFileSync(process.env.COHORT || 'research/data/coho
 const bz  = JSON.parse(fs.readFileSync(process.env.BUYERS || 'research/scratch-features/buyers-12h.json', 'utf8'));
 
 const AGG = 0.01, GAS = 0.00008;
-const netQ = (t) => Number(t.q) - Number(t.f || 0) - Number(t.x || 0);
+const netQ  = (t) => Number(t.q) - Number(t.f || 0) - Number(t.x || 0); // buy: enters reserve
+const sellQ = (t) => Number(t.q) + Number(t.f || 0) + Number(t.x || 0); // sell: LEAVES reserve gross
 const buyOut  = (Q, T, q) => (T * q) / (Q + q);
 const sellOut = (Q, T, t) => (Q * t) / (T + t);
 
@@ -77,7 +78,8 @@ for (const c of coh.curves) {
     const key = `${c.curve}|${tr.b}|${tr.i}`;
     const rc = recip.get(key);
     if (rc !== undefined) { buyers.add(rc); maxCurves = Math.max(maxCurves, curvesBefore.get(key) ?? 0); }
-    if (tr.buy) { Q += q; T -= t; funded += q; } else { Q -= q; T += t; funded -= q; }
+    if (tr.buy) { Q += q; T -= t; funded += q; }
+    else { const g = sellQ(tr); Q -= g; T += t; funded -= g; }
     if (T <= 0 || Q <= 0) break;
 
     if (trigger === null && funded / thr >= 0.01) {
@@ -99,7 +101,8 @@ for (const c of coh.curves) {
       held = got; entryB = tr.b; spent = SIZE + GAS; Q += net; T -= got; funded += net;
     }
     const q = netQ(tr), t = Number(tr.t);
-    if (tr.buy) { Q += q; T -= t; funded += q; } else { Q -= q; T += t; funded -= q; }
+    if (tr.buy) { Q += q; T -= t; funded += q; }
+    else { const g = sellQ(tr); Q -= g; T += t; funded -= g; }
     if (T <= 0 || Q <= 0) break;
     if (held > 0 && c.graduated && tr.b >= c.gradBlock) {
       const out = sellOut(Q, T, held) * (1 - CF) * (1 - AGG);

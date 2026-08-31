@@ -2,7 +2,8 @@
 // Validate the buyer-independent legs of the composite rule on the 48h cohort.
 const fs = require('fs');
 const d = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
-const netQ = (t) => Number(t.q) - Number(t.f || 0) - Number(t.x || 0);
+const netQ  = (t) => Number(t.q) - Number(t.f || 0) - Number(t.x || 0); // buy: enters reserve
+const sellQ = (t) => Number(t.q) + Number(t.f || 0) + Number(t.x || 0); // sell: LEAVES reserve gross
 const buyOut = (Q,T,q) => T*q/(Q+q), sellOut = (Q,T,t) => Q*t/(T+t);
 function solve(tr){const b=tr.filter(x=>x.buy).slice(0,2); if(b.length<2)return null;
   const q1=netQ(b[0]),t1=Number(b[0].t),q2=netQ(b[1]),t2=Number(b[1].t),dn=t1*q2-t2*q1;
@@ -36,7 +37,7 @@ for(const c of C){ const r=solve(c.trades); if(!r) continue; const thr=Number(c.
   for(const tr of c.trades){ const q=netQ(tr),t=Number(tr.t);
     if(!held&&trig){ const net=SIZE*1e18*(1-AGG)*(1-CF); const got=buyOut(Q,T,net); if(!(got>0))break;
       held=got;spent=SIZE+GAS;Q+=net;T-=got;f+=net; }
-    if(tr.buy){Q+=q;T-=t;f+=q;}else{Q-=q;T+=t;f-=q;}
+    if(tr.buy){Q+=q;T-=t;f+=q;}else{const g=sellQ(tr);Q-=g;T+=t;f-=g;}
     if(T<=0||Q<=0)break;
     if(!trig&&f/thr>=0.01) trig=true;
     if(held&&c.graduated&&tr.b>=c.gradBlock){ const o=sellOut(Q,T,held)*(1-CF)*(1-AGG);

@@ -76,7 +76,8 @@ function simulate(curve, entryPct, sizeEth, timeoutBlocks) {
     }
 
     // Replay the observed trade.
-    if (tr.buy) { Q += q; T -= t; funded += q; } else { Q -= q; T += t; funded -= q; }
+    if (tr.buy) { Q += q; T -= t; funded += q; }
+    else { const g = sellQ(tr); Q -= g; T += t; funded -= g; }
     if (T <= 0 || Q <= 0) return null;
 
     if (held > 0) {
