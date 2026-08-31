@@ -23,7 +23,7 @@ const cfg = require('./src/curve/config');
 const { provider, wallet, primeNonce, resyncNonce, FEES } = require('./src/curve/chain');
 const { watch } = require('./src/curve/watcher');
 const { buy, holdAndExit } = require('./src/curve/trader');
-const { expectedTokens } = require('./src/curve/pricing');
+const { expectedTokens, floorTokens } = require('./src/curve/pricing');
 
 const BANDS = [
   { max: 1,  label: '<=1 blk  (<=150ms)', roi: '+94.6%' },
@@ -129,7 +129,8 @@ async function handle(ev) {
   const amountIn = parseEther(cfg.buyEth);
   const tokens = expectedTokens(amountIn);
   console.log(`${tag}  BUY  +${landing} blk (raw +${rawLag}, detect +${detectBlocks}, send +${sendBlocks}) | ${cfg.buyEth} ETH ` +
-    `-> ~${Number(formatEther(tokens)).toFixed(0)} tok`);
+    `-> ~${Number(formatEther(tokens)).toFixed(0)} tok | floor ${cfg.slippageBps}bps = ` +
+    `${Number(formatEther(floorTokens(parseEther(cfg.buyEth)))).toFixed(0)}`);
 
   if (cfg.dryRun) {
     console.log(`   [dry] would buy on curve ${ev.curve}`);
@@ -156,8 +157,16 @@ async function handle(ev) {
     console.log(`   closed ${delta >= 0 ? '+' : ''}${delta.toFixed(6)} ETH (streak ${state.lossStreak})`);
   } catch (err) {
     // A revert is the designed outcome when someone landed first: the floor
-    // did its job. It is information, not a fault.
-    console.log(`   no fill: ${(err.shortMessage || err.message).slice(0, 90)}`);
+    // did its job. But "reverted" with no hash and no reason is not
+    // diagnosable, and the difference between "outbid" and "our call is
+    // wrong" matters enormously.
+    const hash = err.transaction?.hash || err.receipt?.hash || err.transactionHash;
+    const data = err.data || err.info?.error?.data;
+    console.log(`   no fill: ${(err.shortMessage || err.message).slice(0, 80)}` +
+      (hash ? `
+            tx ${hash}` : '') +
+      (data ? `
+            revert data ${String(data).slice(0, 42)}` : ''));
     await resyncNonce();
   } finally {
     state.open--;
