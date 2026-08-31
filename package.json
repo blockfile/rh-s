@@ -8,7 +8,9 @@
     "start": "node index.js",
     "watch": "node index.js --dry",
     "setup": "node scripts/setup.js",
-    "balance": "node scripts/balance.js"
+    "balance": "node scripts/balance.js",
+    "curve:watch": "node curve.js --dry",
+    "curve": "node curve.js"
   },
   "engines": {
     "node": ">=20"
