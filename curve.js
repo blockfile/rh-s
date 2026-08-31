@@ -20,7 +20,7 @@
 
 const { formatEther, parseEther } = require('ethers');
 const cfg = require('./src/curve/config');
-const { provider, wallet, primeNonce, resyncNonce } = require('./src/curve/chain');
+const { provider, wallet, primeNonce, resyncNonce, FEES } = require('./src/curve/chain');
 const { watch } = require('./src/curve/watcher');
 const { buy, holdAndExit } = require('./src/curve/trader');
 const { expectedTokens } = require('./src/curve/pricing');
@@ -112,6 +112,20 @@ async function handle(ev) {
   const blocked = capsBlock();
   if (blocked) { console.log(`${tag}  SKIP — ${blocked}`); return; }
 
+  // Check we can actually afford the ticket. Without this the send fails deep
+  // in the provider and surfaces as "no fill", which is indistinguishable from
+  // losing a race — you would think you were being outrun when you were simply
+  // out of money.
+  if (!cfg.dryRun && wallet) {
+    const bal = await provider.getBalance(wallet.address);
+    const need = parseEther(cfg.buyEth) + (BigInt(cfg.gasLimit) * FEES.maxFeePerGas);
+    if (bal < need) {
+      console.log(`${tag}  SKIP — balance ${formatEther(bal)} < ticket+gas ${formatEther(need)}. ` +
+        `Lower CURVE_BUY_ETH or top up; the bot will not trade until it fits.`);
+      return;
+    }
+  }
+
   const amountIn = parseEther(cfg.buyEth);
   const tokens = expectedTokens(amountIn);
   console.log(`${tag}  BUY  +${landing} blk (raw +${rawLag}, detect +${detectBlocks}, send +${sendBlocks}) | ${cfg.buyEth} ETH ` +
@@ -162,8 +176,19 @@ async function main() {
   if (wallet && !cfg.dryRun) {
     await primeNonce();
     const bal = await provider.getBalance(wallet.address);
-    console.log(`balance  ${formatEther(bal)} ETH`);
-    if (bal < parseEther(cfg.buyEth)) throw new Error('balance below one ticket');
+    const ticket = parseEther(cfg.buyEth);
+    const gasPer = BigInt(cfg.gasLimit) * FEES.maxFeePerGas;
+    console.log(`balance  ${formatEther(bal)} ETH | ticket ${cfg.buyEth} | ` +
+      `headroom ${formatEther(bal - ticket)} ETH`);
+    if (bal < ticket + gasPer) throw new Error(`balance below one ticket + gas (${formatEther(ticket + gasPer)})`);
+    // A stop-loss is -CURVE_SL_BPS on the ticket. If a couple of those would
+    // drop you under one ticket, the run stalls after two bad trades.
+    const worst = (ticket * BigInt(cfg.stopLossBps)) / 10_000n;
+    const survives = Number((bal - ticket) / worst);
+    if (survives < 3) {
+      console.log(`WARNING  only ~${survives.toFixed(1)} stop-losses of headroom. ` +
+        `Consider CURVE_BUY_ETH=${(Number(formatEther(bal)) * 0.7).toFixed(3)} or top up.`);
+    }
   }
   console.log('\nwatching for curve creations…\n');
   setInterval(printSummary, 60_000);
