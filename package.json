@@ -10,7 +10,8 @@
     "setup": "node scripts/setup.js",
     "balance": "node scripts/balance.js",
     "curve:watch": "node curve.js --dry",
-    "curve": "node curve.js"
+    "curve": "node curve.js",
+    "latency": "node scripts/latency-check.js"
   },
   "engines": {
     "node": ">=20"
