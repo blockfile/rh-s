@@ -34,27 +34,30 @@ module.exports = {
   buyEth: str(process.env.CURVE_BUY_ETH, '0.08'),
 
   // Floor on tokens received, in bps off the modelled output.
-  // 10000 == no floor (minOut = 0).
   //
-  // THE PRICE MODEL IS NOT TRUSTWORTHY, so a floor derived from it rejects
-  // good trades. Binary-searching the true output of buy(0.02 ETH) on
-  // brand-new curves that all report the SAME config (launchConfigId 0,
-  // graduationThreshold 4.2) returned:
+  // 7500 == accept down to 25% of the modelled tokens. This is a
+  // CONFISCATION GUARD, not a price guarantee, and it is sized from measured
+  // outcomes rather than from trusting the model.
   //
-  //     6.25M, 11.40M, 17.12M, 50.00M, 50.00M, 50.00M, 75.00M tokens
+  // The curve charges a snipe tax of up to snipeTaxStartBps = 9900, i.e. it
+  // keeps 99% of the input. Measured across live buys by fill delay, for
+  // non-deployer buyers:
   //
-  // a 12x spread against a model that always predicts 11.42M. Something
-  // beyond the launch config varies per curve and is not yet identified, so
-  // any floor computed from the model is arbitrary: at 1200bps every live buy
-  // reverted, and at 3500bps they still did.
+  //   +0-1  blocks   n= 41   max cost  1.00%   safe
+  //   +2-10 blocks   n= 43   max cost 99.00%   3 of 43 CONFISCATED
+  //   +11-30 blocks  n=159   max cost 11.19%
+  //   +100+ blocks   n=1359  max cost  3.00%
   //
-  // Every one of the 22 direct early buyers observed on-chain passes
-  // minOut = 0. Entry protection here comes from maxEntryBlocks -- being
-  // provably early -- not from a price guarantee we cannot compute. Downside
-  // is bounded by the 30s hold and the stop-loss instead.
+  // Two live buys landed at +3 blocks and each paid 99%: 0.02 ETH in,
+  // ~0.1M tokens out against a modelled 11.4M, so 0.9% of expectation. The
+  // position was worth ~0.0002 ETH the moment it filled.
   //
-  // Set this back to ~1500 once the model is fixed and can be trusted.
-  slippageBps: num(process.env.CURVE_SLIPPAGE_BPS, 10000),
+  // Legitimate curve-to-curve variance measured 0.5x to 6.6x of the model
+  // (true output for 0.02 ETH ranged 6.25M-75M tokens on curves reporting
+  // identical config), so a floor must sit below that spread. 25% clears the
+  // lowest legitimate observation (54.7%) with room, and rejects a 99% tax
+  // (0.9%) by a factor of 27.
+  slippageBps: num(process.env.CURVE_SLIPPAGE_BPS, 7500),
 
   // ── timing, which is the whole edge ───────────────────────────────────────
   // Measured ROI by fill latency: <=150ms +94.6%, 150-350ms +52.4%,
