@@ -35,6 +35,27 @@ const BANDS = [
 ];
 const bandOf = (n) => BANDS.find((b) => n <= b.max);
 
+// Detection over websocket is free, but the buy still has to travel to a node.
+// That round trip is real blocks and must be counted or the histogram lies.
+let sendRttMs = 0;
+async function probeSendRtt(samples = 1) {
+  // Seed from a MEDIAN of several samples, not one. Seeding off a single fast
+  // first call made this report 0 blocks against a true 155ms (2 blocks), i.e.
+  // it flattered exactly the number the go/no-go decision rests on.
+  const got = [];
+  for (let i = 0; i < samples; i++) {
+    try {
+      const t0 = Date.now();
+      await provider.getBlockNumber();
+      got.push(Date.now() - t0);
+    } catch { /* skip */ }
+  }
+  if (!got.length) return;
+  got.sort((a, b) => a - b);
+  const ms = got[Math.floor(got.length / 2)];
+  sendRttMs = sendRttMs ? Math.round(sendRttMs * 0.7 + ms * 0.3) : ms;
+}
+
 const state = {
   seen: 0, acted: 0, skippedLate: 0, open: 0,
   spentToday: 0, lossStreak: 0, wins: 0, losses: 0, pnl: 0,
@@ -71,14 +92,20 @@ function capsBlock() {
 
 async function handle(ev) {
   state.seen++;
-  const lag = ev.headAtDetect - ev.createdBlock;   // RPC blocks, 100ms each
-  const landing = lag + 1;                          // earliest block we could be in
+  // Raw lag understates reality: the head we compared against was itself read
+  // one RTT ago, and our buy needs another RTT to reach the node. Both are
+  // real blocks of delay, so both are counted.
+  const rawLag = ev.headAtDetect - ev.createdBlock;
+  const detectBlocks = Math.round((ev.rttMs || 0) / 100);   // 0 over websocket
+  const sendBlocks = Math.round(sendRttMs / 100);            // always paid
+  const landing = rawLag + detectBlocks + sendBlocks + 1;
   recordLatency(landing);
 
   const tag = `${new Date().toISOString().slice(11, 23)} ${ev.token.slice(0, 10)}`;
   if (landing > cfg.maxEntryBlocks) {
     state.skippedLate++;
-    console.log(`${tag}  SKIP late — would land +${landing} blk (cap ${cfg.maxEntryBlocks}), expectancy negative`);
+    console.log(`${tag}  SKIP late — would land +${landing} blk ` +
+      `(raw +${rawLag}, +${detectBlocks} detect, +${sendBlocks} send/${sendRttMs}ms), cap ${cfg.maxEntryBlocks}`);
     return;
   }
 
@@ -87,8 +114,8 @@ async function handle(ev) {
 
   const amountIn = parseEther(cfg.buyEth);
   const tokens = expectedTokens(amountIn);
-  console.log(`${tag}  BUY  +${landing} blk | ${cfg.buyEth} ETH -> ~${formatEther(tokens)} tok ` +
-    `(${(Number(formatEther(tokens)) / 1e9 * 100).toFixed(2)}% of supply)`);
+  console.log(`${tag}  BUY  +${landing} blk (raw +${rawLag}, detect +${detectBlocks}, send +${sendBlocks}) | ${cfg.buyEth} ETH ` +
+    `-> ~${Number(formatEther(tokens)).toFixed(0)} tok`);
 
   if (cfg.dryRun) {
     console.log(`   [dry] would buy on curve ${ev.curve}`);
@@ -128,6 +155,8 @@ async function main() {
   console.log(`wallet   ${wallet ? wallet.address : '(no PRIVATE_KEY — watch only)'}`);
   console.log(`ticket   ${cfg.buyEth} ETH | floor ${cfg.slippageBps}bps | hold ${cfg.holdMs}ms`);
   console.log(`entry    reject past +${cfg.maxEntryBlocks} blocks | poll ${cfg.pollMs}ms`);
+  console.log(`NOTE     landing estimates INCLUDE network cost: detection (HTTP only)`);
+  console.log(`         plus the broadcast round trip, which is unavoidable in both modes.`);
   console.log(`caps     ${cfg.maxConcurrent} concurrent | ${cfg.maxDailySpendEth} ETH/day | ` +
     `stop after ${cfg.maxConsecutiveLosses} losses`);
   if (wallet && !cfg.dryRun) {

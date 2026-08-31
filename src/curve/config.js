@@ -11,6 +11,15 @@ const bool = (v, d) => (v === undefined || v === '' ? d : v === 'true' || v === 
 
 module.exports = {
   rpcUrl: str(process.env.RPC_URL, 'https://rpc.mainnet.chain.robinhood.com'),
+  // Push beats polling by a whole round trip, and there IS a websocket on this
+  // chain even though the official docs only list HTTP. Measured from Asia:
+  // official HTTP 282ms median, publicnode HTTP 150ms. Set this and detection
+  // stops costing a request at all.
+  // Measured from Asia: official HTTP 240ms median, publicnode 155ms, and
+  // publicnode also serves websockets. arrowrpc returns 530 and is dead.
+  //   WS_URL=wss://robinhood-rpc.publicnode.com
+  //   RPC_URL=https://robinhood-rpc.publicnode.com
+  wsUrl: str(process.env.WS_URL, ''),
   chainId: num(process.env.CHAIN_ID, 4663),
   privateKey: str(process.env.PRIVATE_KEY, ''),
 
