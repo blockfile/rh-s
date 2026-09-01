@@ -1,0 +1,18 @@
+V2 launches over 1d: 12
+
+launch                    devBuy      swaps  first buys (EVM offset / ETH in / px vs first)
+  0xb8293Ad2  0.000000123 ETH     1  +0blk 0.00000 1.00x
+  0x91983F63     0.015 ETH     1  +0blk 0.015 1.00x
+  0x324FFf84      0.05 ETH     1  +0blk 0.05 1.00x
+  0x78A75566     0.041 ETH     1  +0blk 0.041 1.00x
+  0xc6730E44      0.02 ETH     1  +0blk 0.02 1.00x
+  0xaDeDc58E     0.002 ETH     1  +0blk 0.002 1.00x
+  0x38Af9788       0.1 ETH     2  +0blk 0.1 1.00x
+  0xD4B18eB8       0.0 ETH     0  (no buys)
+  0x44E2f083     0.005 ETH     1  +0blk 0.005 1.00x
+  0x0183f994     0.045 ETH     1  +0blk 0.045 1.00x
+  0xB112AF55     0.001 ETH     1  +0blk 0.001 1.00x
+  0xf98AD5Bf     0.005 ETH    22  +0blk 0.005 1.00x  +1blk 0.03663 1.03x  +3blk 0.07511 1.11x  +3blk 0.07511 1.23x
+
+buys landing at exactly launchBlock+1: 1 of 14 early buys sampled
+launches with ANY buy in the first ~5 EVM blocks: 11 of 12
