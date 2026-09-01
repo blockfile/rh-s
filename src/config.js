@@ -31,7 +31,13 @@ module.exports = {
   // router/weth/poolFee below were re-verified against V2: every recent launch
   // reports dexId 0 and dexFactory 0x1f7d7550…2EfA, which is exactly what
   // SwapRouter02.factory() returns, and every pool is WETH at fee 10000.
-  factory: '0xf4fc0cd27fc8ecf17e55ee4c3f7201897df3eb75',
+  factory: str(process.env.FACTORY_ADDRESS, '0xf4fc0cd27fc8ecf17e55ee4c3f7201897df3eb75'),
+  // Previous deployments, both now dormant. Kept for reference only:
+  //   0xA5aAb3F0c6EeadF30Ef1D3Eb997108E976351feB  (0 launches/24h)
+  //   0x966ffA3957a6d3621D3EfC96E22160806f0EF141  (0 launches/24h)
+  // A dormant factory does not error, it simply never fires -- which is why
+  // the boot check below refuses to start against one.
+  minLaunchesPerDay: num(process.env.MIN_LAUNCHES_PER_DAY, 1),
   // dexConfig #0: swapRouter. This is SwapRouter02, and it is what the working
   // sniper calls — `to` on every one of its buys.
   router: '0xCaf681a66D020601342297493863E78C959E5cb2',

@@ -7,6 +7,7 @@
 
 const { Contract, formatEther } = require('ethers');
 const config = require('./src/config');
+const { validateFactory } = require('./src/validate');
 const { provider, wallet, weth } = require('./src/chain');
 const { FACTORY_ABI } = require('./src/abi');
 const { handleLaunch } = require('./src/sniper');
@@ -48,6 +49,10 @@ async function main() {
   // getLaunchConfig — every one of those ids reverts. Config 0 is the real
   // one; `restrictionsEndBlock - config0.restrictionBlocks` was checked
   // against the true launch block.number on 4 consecutive V2 launches, 4/4.
+  // Refuse to run against a dormant or wrong factory. Silence is this bot's
+  // worst failure mode: it looks identical to a quiet market.
+  await validateFactory();
+
   const launchConfig = await factory.getLaunchConfig(0);
   console.log(
     `\nconfig   supply ${launchConfig.supply} | tick ${launchConfig.initialTick} | ` +
