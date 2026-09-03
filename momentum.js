@@ -25,9 +25,11 @@ const cfg = require('./src/curve/config');
 const { provider, wallet, curveIface, FEES, primeNonce, takeNonce, resyncNonce } = require('./src/curve/chain');
 const { ERC20_ABI } = require('./src/curve/abi');
 const { Tracker, run } = require('./src/curve/tracker');
+const { PaperBook } = require('./src/curve/paper');
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const tracker = new Tracker();
+const paper = new PaperBook();
 
 const state = {
   seen: 0, evaluated: 0, qualified: 0, open: 0,
@@ -106,7 +108,16 @@ async function trade(c, v) {
     '% funded, cost ' + v.cost + 'bps');
 
   if (cfg.dryRun) {
-    console.log('   [dry] would buy ' + cfg.buyEth + ' ETH on curve ' + c.curve);
+    // Score it rather than just announce it. A dry run that only prints
+    // "would buy" proves the trigger fires; it says nothing about whether
+    // firing was a good idea, which is the only open question.
+    c.fundedPct = v.funded;
+    const pos = await paper.enter(c, Number(cfg.buyEth));
+    if (!pos) { console.log('   [paper] could not price this curve, skipping'); return; }
+    console.log('   [paper] opened ' + cfg.buyEth + ' ETH -> ' +
+      (pos.tokens / 1e24).toFixed(2) + 'M tokens at ' + pos.costBps + 'bps');
+    state.open++;
+    trackPaper(c, pos).catch((e) => console.error('paper', e.message));
     return;
   }
 
@@ -144,6 +155,41 @@ async function trade(c, v) {
     await resyncNonce();
   } finally {
     state.open--;
+  }
+}
+
+// Follow a paper position on the real curve until it graduates or times out.
+async function trackPaper(c, pos) {
+  const deadline = Date.now() + cfg.graduationWaitMs;
+  try {
+    while (Date.now() < deadline && !c.graduated) {
+      await sleep(20000);
+      const m = await paper.mark(pos).catch(() => null);
+      if (m && m.outEth <= pos.sizeEth * 0.35) {   // same stop the live path uses
+        const rec = await paper.close(pos, 'stop');
+        return report(rec);
+      }
+    }
+    const rec = await paper.close(pos, c.graduated ? 'graduated' : 'timeout');
+    report(rec);
+  } finally {
+    state.open--;
+  }
+}
+
+function report(rec) {
+  if (!rec) return;
+  state.pnl += rec.pnl;
+  if (rec.pnl > 0) { state.wins++; state.lossStreak = 0; }
+  else { state.losses++; state.lossStreak++; }
+  console.log('   [paper] ' + rec.token.slice(0, 10) + ' ' + rec.reason +
+    ' after ' + rec.heldSec + 's -> ' + (rec.pnl >= 0 ? '+' : '') + rec.pnl.toFixed(6) + ' ETH');
+  const st = paper.stats();
+  if (st) {
+    console.log('   [paper] ' + st.n + ' closed | win ' + st.winPct.toFixed(0) + '% | ' +
+      'total ' + st.total.toFixed(5) + ' | mean ' + st.mean.toFixed(6) +
+      ' | MEDIAN ' + st.median.toFixed(6) +
+      ' | best ' + st.best.toFixed(4) + ' (' + st.topShare.toFixed(0) + '% of total)');
   }
 }
 

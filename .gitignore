@@ -7,3 +7,5 @@ research/data/
 research/out/
 research/scratch-*
 research/*.log
+
+research/paper-trades.jsonl
