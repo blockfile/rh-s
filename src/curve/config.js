@@ -98,6 +98,27 @@ module.exports = {
   maxFeeGwei: str(process.env.MAX_FEE_GWEI, '2'),
   priorityFeeGwei: str(process.env.PRIORITY_FEE_GWEI, '0'),
 
+  // ── momentum entry (momentum.js) ──────────────────────────────────────────
+  // Reproduces what seven measured wallets actually do. They are NOT snipers:
+  // median entry is 53-87s after creation, on a curve that already has 32-42
+  // trades and 10-30% of its graduation threshold funded. Waiting also puts
+  // the buy far outside the +2..+10 block window where a 99% snipe tax fires.
+  entryDelayMs: num(process.env.MOM_ENTRY_DELAY_MS, 60_000),
+  minTrades: num(process.env.MOM_MIN_TRADES, 30),
+  minFundingPct: num(process.env.MOM_MIN_FUNDING_PCT, 20),
+  // Skip punitive curves. Read from the curve's own trade log rather than
+  // launch calldata: the modelled wallets bought 0 of 114 tokens carrying the
+  // 1000bps maximum creator tax.
+  maxCostBps: num(process.env.MOM_MAX_COST_BPS, 500),
+  // Curves mostly die. Stop tracking them so the map does not grow forever.
+  trackTtlMs: num(process.env.MOM_TRACK_TTL_MS, 30 * 60_000),
+  // They hold THROUGH graduation and dump into the graduated pool. If a curve
+  // has not graduated by this point, sell back into the curve and move on.
+  graduationWaitMs: num(process.env.MOM_GRAD_WAIT_MS, 20 * 60_000),
+  // Exit in slices, as they do (20-50 partial sells), to limit own impact.
+  exitSlices: num(process.env.MOM_EXIT_SLICES, 6),
+  exitSliceGapMs: num(process.env.MOM_EXIT_GAP_MS, 1500),
+
   // ── hard caps ─────────────────────────────────────────────────────────────
   // 69.6% of wallets on this venue lose money and the market is negative-sum
   // by ~520 ETH/day of rake. These exist so a bad run stops instead of

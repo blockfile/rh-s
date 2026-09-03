@@ -11,7 +11,9 @@
     "balance": "node scripts/balance.js",
     "curve:watch": "node curve.js --dry",
     "curve": "node curve.js",
-    "latency": "node scripts/latency-check.js"
+    "latency": "node scripts/latency-check.js",
+    "momentum:watch": "node momentum.js --dry",
+    "momentum": "node momentum.js"
   },
   "engines": {
     "node": ">=20"
